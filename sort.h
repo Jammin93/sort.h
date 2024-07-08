@@ -1,191 +1,253 @@
-#ifndef SORT_H_
-#define SORT_H_
+#ifndef SORT_H
+#define SORT_H
 
+#define VERSION "1.0.0"
+
+#include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define true 1
-#define false 0
-#define bool short
-#define CIURA_COUNT 9
+#define ALLOC_ERROR -1
 
-const int CIURA_SEQUENCE[CIURA_COUNT] = {1, 4, 10, 23, 57, 132, 301, 701, 1750};
+#define CIURA_SIZE 9
+
+const int const CIURA_SEQ[CIURA_SIZE] = {
+	1, 4, 10, 23, 57, 132, 301, 701, 1750
+};
 
 typedef struct {
 	int* elems;
 	long long size;
-	long long end;
-} INT_ARRAY;
+	long long logsize;
+} ARRAY;
 
-int
-swap(int* vp1, int* vp2) {
-	int temp = *vp1;
-	*vp1 = *vp2;
-	*vp2 = temp;
+static void
+swap(void *vp1, void *vp2, long long elemsize) {
+	/*	Swap the bit patterns of the two void pointers. The number of bytes to 
+		swap is determined by `elemsize`. 
+	*/
+	unsigned char *p = vp1, *r = vp2, temp;
+	for (long long i = 0; i < elemsize; ++i) {
+		temp = p[i];
+		p[i] = r[i];
+		r[i] = temp;
+	}
 }
 
-void
-transpose(int* arr, long long end) {
-	int left = 0, right = end;
+static void
+transpose(void *arr, long long upper, long long elemsize) {
+	// Reverse the order of the dynamic array elements.
+	int left = 0, right = upper;
+	int l, r;
+	char *ap = (char*) arr;
 	while (left < right) {
-		swap(&arr[left], &arr[right]);
+		l = left * elemsize;
+		r = right * elemsize;
+		swap(&ap[l], &ap[r], elemsize);
 		++left;
 		--right;
 	}
 }
 
-long long
-double_size(void *vp, long long size, long long tsize) {
-	/*	
-	Double the size of the allocated space for the pointer and return the 
-	new size.
-	*/
-	long long new_size = size * 2;
-	char* temp = (char*) realloc(vp, new_size * tsize);
-	if (temp != NULL) {
-		vp = temp;	
+static long long
+array_double(void *arr, long long size, long long elemsize) {
+	// Double the size of the dynamic array.
+	size *= 2;
+	arr = realloc(arr, size * elemsize);
+	if (! arr) {
+		return ALLOC_ERROR;
 	}
-	else {
-		fprintf(stderr, "Unable to allocate sufficient memory for array!\n");
-		exit(1);
-	}
-	return new_size;
+	return size;
 }
 
-void
-comb_sort(int* arr, long long size, bool reverse) {
-	long long gap = size, r;
-	int left, right;
+static long
+floor_log2(long long n) {
+	// Return the floor of log2(`n`).
+	long res = (long) log(n) / log(2);
+	return res;
+}
+
+void 
+comb_sort(
+		void *arr, 
+		long long logsize, 
+		long long elemsize, 
+		int (*cmp_fn)(void*, void*),
+		bool asc) {
+	long long gap = logsize;
+	long long l, r;
+	void *left, *right;
 	bool swapped = true;
-	if (reverse == true) {
-		while (gap != 1 || swapped == true) {
+	char *ap = (char*) arr;
+	if (asc) {
+		while (gap != 1 || swapped) {
 			gap = gap / 1.3;
 			gap = (1 > gap) ? 1 : gap;
-			swapped = false;			
-			for (long long l = 0; l < size - gap; ++l) {
-				r = l + gap;
-				left = arr[l];
-				right = arr[r];
-				if (left < right) {
-					swap(&arr[l], &arr[r]);
-					swapped = true;				
-				}
-			} 		
-		}	
+			swapped = false;
+			for (long long k = 0; k < logsize - gap; ++k) {
+				l = k * elemsize;
+				r = (k + gap) * elemsize;
+				left = &ap[l];
+				right = &ap[r];
+				if (cmp_fn(left, right) > 0) {
+					swap(left, right, elemsize);
+					swapped = true;
+				}	
+			}
+		}
 	}
 	else {
-		while (gap != 1 || swapped == true) {
+		while (gap != 1 || swapped) {
 			gap = gap / 1.3;
 			gap = (1 > gap) ? 1 : gap;
-			swapped = false;			
-			for (long long l = 0; l < size - gap; ++l) {
-				r = l + gap;
-				left = arr[l];
-				right = arr[r];
-				if (left > right) {
-					swap(&arr[l], &arr[r]);
-					swapped = true;				
-				}
-			} 		
-		}	
+			swapped = false;
+			for (long long k = 0; k < logsize - gap; ++k) {
+				l = k * elemsize;
+				r = (k + gap) * elemsize;
+				left = &ap[l];
+				right = &ap[r];
+				if (cmp_fn(left, right) < 0) {
+					swap(left, right, elemsize);
+					swapped = true;
+				}	
+			}
+		}
 	}
 }
 
 void
-insertion_sort(int* arr, long long size, bool reverse) {
-	int k, temp;
-	if (reverse == true) {
-		for (int i = 1; i < size; ++i) {
-			temp = arr[i];
+insertion_sort(
+		void *arr,
+		long long logsize,
+		long long elemsize,
+		int (*cmp_fn)(void*, void*),
+		bool asc) {
+	void *temp = malloc(elemsize);
+	long long k, idx;
+	char *ap = (char*) arr;
+	if (asc) {
+		for (long long i = 1; i < logsize; ++i) {
 			k = i;
-			while (k >= 1 && arr[k - 1] < temp) {
-				arr[k] = arr[k - 1];
+			idx = i * elemsize;
+			memcpy(temp, ap + idx, elemsize);
+			while (k >= 1 && cmp_fn(ap + idx - elemsize, temp) > 0) {
+				memcpy(ap + idx, ap + idx - elemsize, elemsize);
 				--k;
+				idx = k * elemsize;
 			}
-			arr[k] = temp;
+			memcpy(ap + idx, temp, elemsize);
 		}
 	}
 	else {
-		for (int i = 1; i < size; ++i) {
-			temp = arr[i];
+		for (long long i = 1; i < logsize; ++i) {
 			k = i;
-			while (k >= 1 && arr[k - 1] > temp) {
-				arr[k] = arr[k - 1];
+			idx = i * elemsize;
+			memcpy(temp, ap + idx, elemsize);
+			while (k >= 1 && cmp_fn(ap + idx - elemsize, temp) < 0) {
+				memcpy(ap + idx, ap + idx - elemsize, elemsize);
 				--k;
+				idx = k * elemsize;
 			}
-			arr[k] = temp;
+			memcpy(ap + idx, temp, elemsize);
 		}
 	}
+	free(temp);
 }
 
-INT_ARRAY
-_shell_gap_sequence(int n) {
-	int array_size = (CIURA_COUNT + 1) * 2;
-	int gap = 1;
-	INT_ARRAY seq;	
-	
-	seq.elems = (int*) malloc(array_size * sizeof(int));
-	if (seq.elems == NULL) {
-		fprintf(stderr, "Unable to allocate sufficient memory for array!\n");
-		exit(1);
+static ARRAY
+shell_gap_sequence(int n) {
+	// Generate the gap sequence for shell sort using Ciura255Odd.
+
+	/*	Since we begin with a sequence of numbers whose values, not including 
+		the first, are bigger than log2(`i`) and then multiply additional gaps 
+		by 2.25, the size of the array will always be smaller than the floor of 
+		log2(`n`). We add floor of log2(`n`) to `CIURA_SIZE` to get a 
+		sufficiently sized array which does not need to be resized during 
+		iteration.
+	*/
+	long long arr_size = CIURA_SIZE + floor_log2(n);
+	short elemsize = sizeof(int);
+	long long gap = 1;
+	ARRAY seq;
+
+	seq.elems = (int*) malloc(arr_size * sizeof(int));
+	if (! seq.elems) {
+		seq.size = ALLOC_ERROR;
+		seq.logsize = ALLOC_ERROR;
+		return seq;
 	}
-	seq.size = array_size;
+	seq.size = arr_size;
 	seq.elems[0] = gap;
-	seq.end = 0;
-	int i = 1;
-	for (; i < CIURA_COUNT; ++i) {
-		if (gap >= n) { 
-			return seq; 
+	seq.logsize = 1;
+	long long i = 1;
+	for (; i < CIURA_SIZE; ++i) {
+		if (gap >= n) {
+			return seq;
 		}
-		gap = CIURA_SEQUENCE[i];
+		gap = CIURA_SEQ[i];
 		seq.elems[i] = gap;
-		++seq.end;
+		++seq.logsize;
 	}
-	gap = (int) gap * 2.25;
+	gap = (long long) gap * 2.25;
 	gap = 1 | gap;
 	while (gap < n) {
 		seq.elems[i] = gap;
 		gap = (int) gap * 2.25;
 		gap = 1 | gap;
 		++i;
-		++seq.end;	
+		++seq.logsize;
 	}
 	return seq;
 }
 
 void
-shell_sort(int* arr, long long size, bool reverse) {
-	INT_ARRAY gaps = _shell_gap_sequence(size);
-	transpose(gaps.elems, gaps.end);
-	int temp, gap, k;
-	if (reverse == true) {
-		for (int i = 0; i <= gaps.end; ++i) {
+shell_sort(
+		void *arr, 
+		long long logsize, 
+		long long elemsize,
+		int (*cmp_fn)(void*, void*),
+		bool asc) {
+	ARRAY gaps = shell_gap_sequence(logsize);
+	transpose(gaps.elems, gaps.logsize - 1, elemsize);
+	void *temp = malloc(elemsize);
+	char *ap = (char*) arr;
+	long long gap, idx, k, g;
+	if (asc) {
+		for (int i = 0; i < gaps.logsize; ++i) {
 			gap = gaps.elems[i];
-			for (int n = gap; n < size; ++n) {
-				temp = arr[n];
+			g = gap * elemsize;
+			for (int n = gap; n < logsize; ++n) {
 				k = n;
-				while (k >= gap && arr[k - gap] < temp) {
-					arr[k] = arr[k - gap];
-					k -= gap;				
+				idx = k * elemsize;
+				memcpy(temp, ap + n * elemsize, elemsize);
+				while (k >= gap && cmp_fn(ap + idx - g, temp) > 0) {
+					memcpy(ap + idx, ap + idx - g, elemsize);
+					k -= gap;
+					idx = k * elemsize;
 				}
-				arr[k] = temp;				
-			}		
-		} 
+				memcpy(ap + idx, temp, elemsize);
+			}
+		}
 	}
 	else {
-		for (int i = 0; i <= gaps.end; ++i) {
+		for (int i = 0; i < gaps.logsize; ++i) {
 			gap = gaps.elems[i];
-			for (int n = gap; n < size; ++n) {
-				temp = arr[n];
+			g = gap * elemsize;
+			for (int n = gap; n < logsize; ++n) {
 				k = n;
-				while (k >= gap && arr[k - gap] > temp) {
-					arr[k] = arr[k - gap];
-					k -= gap;				
+				idx = k * elemsize;
+				memcpy(temp, ap + n  * elemsize, elemsize);
+				while (k >= gap && cmp_fn(ap + idx - g, temp) < 0) {
+					memcpy(ap + idx, ap + idx - g, elemsize);
+					k -= gap;
+					idx = k * elemsize;
 				}
-				arr[k] = temp;				
-			}		
-		} 
+				memcpy(ap + idx, temp, elemsize);
+			}
+		}
 	}
 }
 
-#endif
+#endif // SORT_H
