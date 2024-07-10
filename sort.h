@@ -252,85 +252,105 @@ shell_sort(
 
 void
 __quicksort(
-		void *arr,
-		long long elemsize,
+		void *arr, 
+		size_t elemsize,
 		long long lo,
 		long long hi,
 		int (*cmp_fn)(void*, void*),
 		bool asc) {
-	if (lo >= hi) { 
-		return; 
+	if (lo >= hi) {
+		return;
 	}
 
-	char *ap = (char*) arr;	
+	char *ap = (char*) arr;
 	if (hi - lo <= 10) {
-		void *temp = malloc(elemsize);
-		long long k, idx;
+		register void *temp = malloc(elemsize);
+		register void *vp = malloc(elemsize);
+		register unsigned long long k;
 		if (asc) {
-			for (long long i = lo + 1; i < hi + 1; ++i) {
+			register long long i = (lo + 1) * elemsize;
+			register long long h = (hi + 1) * elemsize;
+			for (; i < h; i += elemsize) {
 				k = i;
-				idx = i * elemsize;
-				memcpy(temp, &ap[idx], elemsize);
-				while (k >= 1 && cmp_fn(ap + idx - elemsize, temp) > 0) {
-					memcpy(&ap[idx], &ap[idx - elemsize], elemsize);
-					--k;
-					idx = k * elemsize;
-				}	
-				memcpy(&ap[idx], temp, elemsize);
+				memcpy(temp, &ap[k], elemsize);
+				while (k >= elemsize) {
+					vp = &ap[k - elemsize];
+					if (cmp_fn(vp, temp) <= 0) {
+						break;
+					}
+					memcpy(&ap[k], vp, elemsize);
+					k -= elemsize;
+				}
+				memcpy(&ap[k], temp, elemsize);
 			}
 		}
 		else {
-			for (long long i = lo + 1; i < hi + 1; ++i) {
+			register long long i = (lo + 1) * elemsize;
+			register long long h = (hi + 1) * elemsize;
+			for (; i < h; i += elemsize) {
 				k = i;
-				idx = i * elemsize;
-				memcpy(temp, ap + idx, elemsize);
-				while (k >= 1 && cmp_fn(ap + idx - elemsize, temp) < 0) {
-					memcpy(&ap[idx], &ap[idx - elemsize], elemsize);
-					--k;
-					idx = k * elemsize;
-				}	
-				memcpy(&ap[idx], temp, elemsize);
+				memcpy(temp, &ap[k], elemsize);
+				while (k >= elemsize) {
+					vp = &ap[k - elemsize];
+					if (cmp_fn(vp, temp) >= 0) {
+						break;
+					}
+					memcpy(&ap[k], vp, elemsize);
+					k -= elemsize;
+				}
+				memcpy(&ap[k], temp, elemsize);
 			}
 		}
 		free(temp);
 	}
 	else {
-		long long pivot = (hi + lo) >> 1;
-		if (cmp_fn(&ap[lo * elemsize], &ap[hi * elemsize]) < 0) {
-			if (cmp_fn(&ap[hi * elemsize], &ap[pivot * elemsize]) < 0) {
-				pivot = hi;
+		register long long pivot = ((hi + lo) >> 1) * elemsize;
+		register long long l = lo * elemsize;
+		register long long h = hi * elemsize;
+		if (cmp_fn(&ap[l], &ap[h]) < 0) {
+			if (cmp_fn(&ap[h], &ap[pivot]) < 0) {
+				pivot = h;	
 			}
 		}
-		else if (cmp_fn(&ap[lo *elemsize], &ap[pivot * elemsize]) < 0) {
-			pivot = lo;
+		else if (cmp_fn(&ap[l], &ap[pivot]) < 0) {
+			pivot = l;	
 		}
-		void *pivot_addr = malloc(elemsize);
-		memcpy(pivot_addr, &ap[pivot * elemsize], elemsize);
-		swap(&ap[pivot * elemsize], &ap[lo * elemsize], elemsize);
-		long long border = lo;
+		register void *pivot_addr = malloc(elemsize);
+		memcpy(pivot_addr, &ap[pivot], elemsize);
 		if (asc) {
-			for (long long i = lo; i < hi + 1; ++i) {
-				if (cmp_fn(&ap[i * elemsize], pivot_addr) < 0) {
-					++border;
-					swap(&ap[i * elemsize], &ap[border * elemsize], elemsize);
+			while (l < h) {
+				while (cmp_fn(&ap[l], pivot_addr) <= 0 && l < h) {
+					l += elemsize;
 				}
-			}
-		} 
-		else {
-			for (long long i = lo; i < hi + 1; ++i) {
-				if (cmp_fn(&ap[i * elemsize], pivot_addr) > 0) {
-					++border;
-					swap(&ap[i * elemsize], &ap[border * elemsize], elemsize);
+				while (cmp_fn(&ap[h], pivot_addr) > 0 && h > l) {
+					h -= elemsize;
+				}
+				if (l < h) {
+					swap(&ap[l], &ap[h], elemsize);
 				}
 			}
 		}
-		swap(&ap[lo * elemsize], &ap[border * elemsize], elemsize);
+		else {
+			while (l < h) {
+				while (cmp_fn(&ap[l], pivot_addr) > 0 && l < h) {
+					l += elemsize;
+				}
+				while (cmp_fn(&ap[h], pivot_addr) <= 0 && h > l) {
+					h -= elemsize;
+				}
+				if (l < h) {
+					swap(&ap[l], &ap[h], elemsize);
+				}
+			}
+		}
+		swap(&ap[l], &ap[h], elemsize);
 		free(pivot_addr);
-
-		__quicksort(arr, elemsize, lo, border - 1, cmp_fn, asc);
-		__quicksort(arr, elemsize, border + 1, hi, cmp_fn, asc);
-	}	
+		
+		__quicksort(arr, elemsize, lo, h / elemsize - 1, cmp_fn, asc);
+		__quicksort(arr, elemsize, h / elemsize + 1, hi, cmp_fn, asc);
+	}
 }
+
 
 void
 quicksort(
